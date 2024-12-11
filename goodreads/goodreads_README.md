@@ -1,30 +1,26 @@
 # Data Analysis Report for Goodreads.csv
 ## Summary
-To provide a summary of the dataset "goodreads.csv," I would typically analyze the contents of the file. Since I don't have direct access to specific datasets, I will outline a format you can use to summarize your dataset.
+To create a summary of the dataset `goodreads.csv` without direct access to the file, I will outline a general approach and key points typically included in a dataset analysis. Here’s how you might structure your summary based on common attributes typically found in Goodreads datasets.
 
-### Summary of the Dataset "goodreads.csv"
+### Summary of goodreads.csv
 
 #### Overview of Key Statistics
-1. **Total Entries:** [Insert total number of books or reviews]
-2. **Key Columns:**
-   - **Title:** Number of unique book titles
-   - **Author:** Number of unique authors
-   - **Average Rating:** [Insert average rating] (e.g., from 1 to 5)
-   - **Total Ratings:** [Insert total number of ratings]
-   - **Genres:** Most common genres and their counts
-   - **Publication Year:** Range of publication years and any trends in publication
-
-3. **Descriptive Statistics:**
-   - Average pages per book: [Insert value]
-   - Ratings distribution: [Insert common ratings and their frequencies]
-   
+- **Number of Records**: Count the total number of entries in the dataset.
+- **Attributes Overview**: List the main columns in the dataset, which may include attributes such as:
+  - `Book Title`
+  - `Author`
+  - `Rating`
+  - `Number of Ratings`
+  - `Genres`
+  - `Pages`
+  - `Date Published`
+- **Descriptive Statistics**:
+  - **Rating**: Calculate the mean, median, mode, standard deviation, and range of book ratings.
+  - **Pages**: Determine the average, minimum, and maximum number of pages among the books.
+  - **Publication Year**: Note the range of publication years and identify trends over different decades.
+  
 #### Top Trends or Correlations
-1. **Ratings by Genre:**
-   - Highlight which genres tend to receive higher average ratings and which genres are more popular (number of ratings).
-   
-2. **Year of Publication vs. Rating:**
-   - Examine trends in how the age of a book (publication year) correlates with its rating. 
-   - Do newer books tend to have higher or lower ratings than older books?
-
-3. **Author Influence:**
-
+- **Rating Trends**: Analyze how the mean rating varies across different genres. Identify which genres have the highest average ratings.
+- **Correlation Analysis**:
+  - Investigate the correlation between the number of ratings and the overall book rating to uncover if popular books tend to have higher or lower ratings.
+  - Look at the relationship between page count and ratings, exploring whether longer books receive better
