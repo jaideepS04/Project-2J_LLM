@@ -23,4 +23,4 @@ To create a summary of the dataset `goodreads.csv` without direct access to the 
 - **Rating Trends**: Analyze how the mean rating varies across different genres. Identify which genres have the highest average ratings.
 - **Correlation Analysis**:
   - Investigate the correlation between the number of ratings and the overall book rating to uncover if popular books tend to have higher or lower ratings.
-  - Look at the relationship between page count and ratings, exploring whether longer books receive better
+  - Look at the relationship between page count and ratings, exploring whether longer books receive better.
