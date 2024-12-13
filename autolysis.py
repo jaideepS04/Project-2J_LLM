@@ -18,7 +18,6 @@ if not openai.api_key:
 CSV_FILES = ["goodreads.csv", "happiness.csv", "media.csv"]
 
 # Function to generate a dynamic prompt based on the dataset structure
-# The code utilizes dynamic prompts effectively based on the dataset's structure and content.
 def generate_dynamic_prompt(csv_file, data):
     # Check for relevant columns
     prompts = [f"Analyze the dataset {csv_file}. Provide insights on the following:"]
