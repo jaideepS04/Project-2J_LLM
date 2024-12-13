@@ -102,17 +102,16 @@ for csv_file in CSV_FILES:
         except Exception as e:
             print(f"Error generating heatmap for {csv_file}: {e}")
 
-    # Dynamic Prompt for Contextual Narratives and Specific Analysis
+    # Dynamic Prompt for More Specific Analysis
     additional_prompt = f"""
     Based on the dataset {csv_file}, identify any potential outliers in the numerical data and suggest transformations or cleaning steps.
-    Additionally, craft a narrative that highlights the key trends and their implications.
     """
 
     try:
         additional_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are an assistant focused on advanced data analysis and contextual narrative creation."},
+                {"role": "system", "content": "You are an assistant focused on advanced data analysis."},
                 {"role": "user", "content": additional_prompt}
             ],
             max_tokens=500
@@ -124,7 +123,6 @@ for csv_file in CSV_FILES:
     except Exception as e:
         print(f"Error generating advanced insights for {csv_file}: {e}")
 
-    # Efficiently load APIs and minimize redundant API calls
     print(f"Finished processing {csv_file}. Results saved for {csv_file}.\n")
 
 print("Processing complete for all datasets.")
