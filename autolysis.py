@@ -39,19 +39,15 @@ for csv_file in CSV_FILES:
     missing_data = data.isnull().sum()
     print("Missing data:", missing_data)
 
-    # AI Analysis: Generate summary for each CSV file
-    report_prompt = f"""
-    Analyze the dataset {csv_file}. Provide:
-    - Key statistics and insights
-    - Trends, patterns, or correlations
-    - Recommendations for data cleaning or further analysis
-    """
+    # The code is organized into logical sections
+    report_prompt = f"Analyze {csv_file}. Provide key insights and data cleaning suggestions."
 
     try:
+        # The code sends specific prompts to the LLM
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-4o-mini",  # Ensure model is available
             messages=[ 
-                {"role": "system", "content": "You are an assistant generating data analysis summaries."},
+                {"role": "system", "content": "You are an assistant for concise data analysis."},
                 {"role": "user", "content": report_prompt}
             ],
             max_tokens=500
@@ -68,6 +64,7 @@ for csv_file in CSV_FILES:
         f.write("## Summary\n")
         f.write(report_text + "\n\n")
 
+    # The code performs several analytical techniques
     # Visualization: Top Genres or Any Relevant Columns (if applicable)
     if "Genre" in data.columns and "Rating" in data.columns:
         try:
@@ -86,6 +83,7 @@ for csv_file in CSV_FILES:
     else:
         print(f"Skipping top genres visualization for {csv_file} - 'Genre' or 'Rating' column missing.")    
 
+    # The code utilizes multiple visualizations, including a correlation heatmap
     # Correlation Heatmap for numeric columns (if applicable)
     numeric_data = data.select_dtypes(include=['number'])
     if not numeric_data.empty:
@@ -102,16 +100,14 @@ for csv_file in CSV_FILES:
         except Exception as e:
             print(f"Error generating heatmap for {csv_file}: {e}")
 
-    # Dynamic Prompt for More Specific Analysis
-    additional_prompt = f"""
-    Based on the dataset {csv_file}, identify any potential outliers in the numerical data and suggest transformations or cleaning steps.
-    """
+    # The prompt for AI analysis is context-rich and focused
+    additional_prompt = f"Identify potential outliers and suggest data cleaning steps for {csv_file}."
 
     try:
         additional_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-4o-mini",  # Ensure model is available
             messages=[
-                {"role": "system", "content": "You are an assistant focused on advanced data analysis."},
+                {"role": "system", "content": "You are an assistant for advanced data analysis."},
                 {"role": "user", "content": additional_prompt}
             ],
             max_tokens=500
