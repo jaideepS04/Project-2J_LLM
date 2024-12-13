@@ -6,15 +6,18 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 
-# Set up the API key and proxy URL
-openai.api_key = os.getenv("eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IjIzZjEwMDI0ODJAZHMuc3R1ZHkuaWl0bS5hYy5pbiJ9.AoGx1fHFJVPj4Lu5O5uTM7gM_JT8m_9RbYSEjRdOhcI")
- # Secure setup (best practice)
+# Secure setup: Load API key from environment variables
+openai.api_key = os.getenv("OPENAI_API_KEY")
 openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 
-# List of CSV files to process
-CSV_FILES = ["goodreads.csv", "happiness.csv","media.csv"]
+# Ensure API key is set
+if not openai.api_key:
+    raise ValueError("OpenAI API key not set. Please configure the environment variable 'OPENAI_API_KEY'.")
 
-# Process Each CSV File
+# List of CSV files to process
+CSV_FILES = ["goodreads.csv", "happiness.csv", "media.csv"]
+
+# Process each CSV file
 for csv_file in CSV_FILES:
     print(f"Processing {csv_file}...")
     
@@ -28,33 +31,35 @@ for csv_file in CSV_FILES:
     print(data.columns)
     print(data.head())  # Check the first few rows
 
+    # Generate descriptive statistics
     summary = data.describe(include="all")
     print(summary)
 
+    # Count missing values
     missing_data = data.isnull().sum()
-    print(missing_data)
+    print("Missing data:", missing_data)
 
-    # AI Analysis - Generate summary for each CSV file
+    # AI Analysis: Generate summary for each CSV file
     report_prompt = f"""
-    Create a summary of the dataset {csv_file}. Include:
-    - Overview of key statistics
-    - Top trends or correlations
-    - Recommendations for next steps
+    Analyze the dataset {csv_file}. Provide:
+    - Key statistics and insights
+    - Trends, patterns, or correlations
+    - Recommendations for data cleaning or further analysis
     """
 
-    openai.api_key = "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6IjIzZjEwMDI0ODJAZHMuc3R1ZHkuaWl0bS5hYy5pbiJ9.AoGx1fHFJVPj4Lu5O5uTM7gM_JT8m_9RbYSEjRdOhcI" # Replace this with your real token
-    openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1"
-
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[ 
-            {"role": "system", "content": "You are an assistant generating data analysis summaries."},
-            {"role": "user", "content": report_prompt}
-        ],
-        max_tokens=300
-    )
-    
-    report_text = response['choices'][0]['message']['content'].strip()
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[ 
+                {"role": "system", "content": "You are an assistant generating data analysis summaries."},
+                {"role": "user", "content": report_prompt}
+            ],
+            max_tokens=300
+        )
+        report_text = response['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        print(f"Error generating AI report for {csv_file}: {e}")
+        report_text = "Error generating report. Please check the dataset and API configuration."
 
     # Save the report for each dataset
     report_filename = f"{os.path.splitext(csv_file)[0]}_README.md"
@@ -65,31 +70,37 @@ for csv_file in CSV_FILES:
 
     # Visualization: Top Genres or Any Relevant Columns (if applicable)
     if "Genre" in data.columns and "Rating" in data.columns:
-        top_genres = data.groupby("Genre")["Rating"].mean().sort_values(ascending=False).head(5)
-        sns.barplot(x=top_genres.index, y=top_genres.values)
-        plt.title(f"Top 5 Genres by Average Rating for {csv_file}")
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        
-        # Save the bar plot for each dataset
-        output_path = f"{os.path.splitext(csv_file)[0]}_top_genres.png"
-        plt.savefig(output_path)
-        plt.clf()  # Clear the plot for the next iteration
+        try:
+            top_genres = data.groupby("Genre")["Rating"].mean().sort_values(ascending=False).head(5)
+            sns.barplot(x=top_genres.index, y=top_genres.values)
+            plt.title(f"Top 5 Genres by Average Rating for {csv_file}")
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+
+            # Save the bar plot for each dataset
+            output_path = f"{os.path.splitext(csv_file)[0]}_top_genres.png"
+            plt.savefig(output_path)
+            plt.clf()  # Clear the plot for the next iteration
+        except Exception as e:
+            print(f"Error generating genre visualization for {csv_file}: {e}")
     else:
         print(f"Skipping top genres visualization for {csv_file} - 'Genre' or 'Rating' column missing.")    
 
     # Correlation Heatmap for numeric columns (if applicable)
     numeric_data = data.select_dtypes(include=['number'])
     if not numeric_data.empty:
-        corr = numeric_data.corr()
-        sns.heatmap(corr, annot=True, cmap="coolwarm")
-        plt.title(f"Correlation Heatmap for {csv_file}")
-        plt.tight_layout()
-        
-        # Save the heatmap for each dataset
-        heatmap_filename = f"{os.path.splitext(csv_file)[0]}_heatmapnew.png"
-        plt.savefig(heatmap_filename)
-        plt.clf()  # Clear the plot for the next iteration
+        try:
+            corr = numeric_data.corr()
+            sns.heatmap(corr, annot=True, cmap="coolwarm")
+            plt.title(f"Correlation Heatmap for {csv_file}")
+            plt.tight_layout()
+
+            # Save the heatmap for each dataset
+            heatmap_filename = f"{os.path.splitext(csv_file)[0]}_heatmap.png"
+            plt.savefig(heatmap_filename)
+            plt.clf()  # Clear the plot for the next iteration
+        except Exception as e:
+            print(f"Error generating heatmap for {csv_file}: {e}")
 
     print(f"Finished processing {csv_file}. Results saved for {csv_file}.\n")
 
