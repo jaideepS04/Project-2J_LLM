@@ -39,19 +39,14 @@ for csv_file in CSV_FILES:
     missing_data = data.isnull().sum()
     print("Missing data:", missing_data)
 
-    # AI Analysis: Generate summary for each CSV file
-    report_prompt = f"""
-    Analyze the dataset {csv_file}. Provide:
-    - Key statistics and insights
-    - Trends, patterns, or correlations
-    - Recommendations for data cleaning or further analysis
-    """
+    # Concise AI Analysis: Summary of dataset
+    report_prompt = f"Analyze {csv_file}. Provide key insights and data cleaning suggestions."
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-4o-mini",  # Ensure model is available
             messages=[ 
-                {"role": "system", "content": "You are an assistant generating data analysis summaries."},
+                {"role": "system", "content": "You are an assistant for concise data analysis."},
                 {"role": "user", "content": report_prompt}
             ],
             max_tokens=500
@@ -102,16 +97,14 @@ for csv_file in CSV_FILES:
         except Exception as e:
             print(f"Error generating heatmap for {csv_file}: {e}")
 
-    # Dynamic Prompt for More Specific Analysis
-    additional_prompt = f"""
-    Based on the dataset {csv_file}, identify any potential outliers in the numerical data and suggest transformations or cleaning steps.
-    """
+    # Concise Prompt for Advanced Insights
+    additional_prompt = f"Identify potential outliers and suggest data cleaning steps for {csv_file}."
 
     try:
         additional_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-4o-mini",  # Ensure model is available
             messages=[
-                {"role": "system", "content": "You are an assistant focused on advanced data analysis."},
+                {"role": "system", "content": "You are an assistant for advanced data analysis."},
                 {"role": "user", "content": additional_prompt}
             ],
             max_tokens=500
