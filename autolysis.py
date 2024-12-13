@@ -1,128 +1,99 @@
-import pandas as pd
-import openai
-import matplotlib
-matplotlib.use("Agg")  # Use a non-interactive backend
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
+# Constants
+API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions" 
+MODEL = "gpt-4o-mini"
+AIPROXY_TOKEN = os.environ.get("AIPROXY_TOKEN")
 
-# Secure setup: Load API key from environment variables
-openai.api_key = os.getenv("OPENAI_API_KEY")
-openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+if not AIPROXY_TOKEN:
+    raise EnvironmentError("AIPROXY_TOKEN environment variable not set.")
 
-# Ensure API key is set
-if not openai.api_key:
-    raise ValueError("OpenAI API key not set. Please configure the environment variable 'OPENAI_API_KEY'.")
+def send_to_openai(prompt, detail="default"):
+    """Send a prompt to the OpenAI API and return the response."""
+    response = requests.post(
+        API_URL,
+        headers={"Authorization": f"Bearer {AIPROXY_TOKEN}"},
+        json={
+            "model": MODEL,
+            "messages": [
+                {"role": "system", "content": "Summarize the data analysis."},
+                {"role": "user", "content": prompt}
+            ]
+        }
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
 
-# List of CSV files to process
-CSV_FILES = ["goodreads.csv", "happiness.csv", "media.csv"]
+def summarize_data_overview(df):
+    info = df.info(buf=None)
+    description = df.describe().to_string()
+    nulls = df.isnull().sum().to_string()
+    summary = f"Info:\n{info}\n\nDescription:\n{description}\n\nNulls:\n{nulls}"
+    return send_to_openai(summary)
 
-# Process each CSV file
-for csv_file in CSV_FILES:
-    print(f"Processing {csv_file}...")
-    
+def clean_missing_data(df):
+    threshold = 0.5
+    df_cleaned = df.dropna(axis=1, thresh=len(df) * (1 - threshold))
+    df_cleaned = df_cleaned.dropna()
+    return df_cleaned
+
+def detect_outliers_and_anomalies(df):
+    results = []
+    for column in df.select_dtypes(include=['number']):
+        q1 = df[column].quantile(0.25)
+        q3 = df[column].quantile(0.75)
+        iqr = q3 - q1
+        min_val = q1 - 1.5 * iqr
+        max_val = q3 + 1.5 * iqr
+        results.append(f"{column}: Q1={q1}, Q3={q3}, IQR={iqr}, Min={min_val}, Max={max_val}")
+    return send_to_openai("\n".join(results))
+
+def compute_correlation_summary(df):
     try:
-        # Try reading the dataset with different encoding
-        data = pd.read_csv(csv_file, encoding='ISO-8859-1')  # Try 'ISO-8859-1' or 'latin1'
-    except UnicodeDecodeError:
-        print(f"Error: Unable to read {csv_file} due to encoding issues.")
-        continue  # Skip to the next file if encoding fails
-
-    print(data.columns)
-    print(data.head())  # Check the first few rows
-
-    # Generate descriptive statistics
-    summary = data.describe(include="all")
-    print(summary)
-
-    # Count missing values
-    missing_data = data.isnull().sum()
-    print("Missing data:", missing_data)
-
-    # AI Analysis: Generate summary for each CSV file
-    report_prompt = f"""
-    Analyze the dataset {csv_file}. Provide:
-    - Key statistics and insights
-    - Trends, patterns, or correlations
-    - Recommendations for data cleaning or further analysis
-    """
-
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[ 
-                {"role": "system", "content": "You are an assistant generating data analysis summaries."},
-                {"role": "user", "content": report_prompt}
-            ],
-            max_tokens=500
-        )
-        report_text = response['choices'][0]['message']['content'].strip()
+        numerical_df = df.select_dtypes(include=["number"])
+        correlation = numerical_df.corr()
+        correlation_str = correlation.to_string()
+        prompt = f"Here is the correlation matrix:\n{correlation_str}\nSummarize the key insights."
+        summary = send_to_openai(prompt)
+        return summary
     except Exception as e:
-        print(f"Error generating AI report for {csv_file}: {e}")
-        report_text = "Error generating report. Please check the dataset and API configuration."
+        return f"Error in computing correlation: {e}"
 
-    # Save the report for each dataset
-    report_filename = f"{os.path.splitext(csv_file)[0]}_README.md"
-    with open(report_filename, "w") as f:
-        f.write(f"# Data Analysis Report for {csv_file.capitalize()}\n")
-        f.write("## Summary\n")
-        f.write(report_text + "\n\n")
-
-    # Visualization: Top Genres or Any Relevant Columns (if applicable)
-    if "Genre" in data.columns and "Rating" in data.columns:
-        try:
-            top_genres = data.groupby("Genre")["Rating"].mean().sort_values(ascending=False).head(5)
-            sns.barplot(x=top_genres.index, y=top_genres.values)
-            plt.title(f"Top 5 Genres by Average Rating for {csv_file}")
-            plt.xticks(rotation=45)
-            plt.tight_layout()
-
-            # Save the bar plot for each dataset
-            output_path = f"{os.path.splitext(csv_file)[0]}_top_genres.png"
-            plt.savefig(output_path)
-            plt.clf()  # Clear the plot for the next iteration
-        except Exception as e:
-            print(f"Error generating genre visualization for {csv_file}: {e}")
+def visualize_numerical_columns(df):
+    """Visualize numerical columns using pair plots."""
+    numerical_cols = df.select_dtypes(include=['number'])
+    if not numerical_cols.empty:
+        # Ensure there are valid numerical columns with non-NaN values
+        valid_cols = numerical_cols.dropna(axis=1, how='all')
+        if not valid_cols.empty:
+            plt.figure(figsize=(10, 10), dpi=100)
+            sns.pairplot(valid_cols)
+            img_path = "numerical_plot.png"
+            plt.savefig(img_path)
+            plt.close()
+            print(f"Numerical columns visualization saved as {img_path}.")
+            return img_path
+        else:
+            print("No valid numerical columns with data found for visualization.")
     else:
-        print(f"Skipping top genres visualization for {csv_file} - 'Genre' or 'Rating' column missing.")    
+        print("No numerical columns found for visualization.")
 
-    # Correlation Heatmap for numeric columns (if applicable)
-    numeric_data = data.select_dtypes(include=['number'])
-    if not numeric_data.empty:
-        try:
-            corr = numeric_data.corr()
-            sns.heatmap(corr, annot=True, cmap="coolwarm")
-            plt.title(f"Correlation Heatmap for {csv_file}")
-            plt.tight_layout()
 
-            # Save the heatmap for each dataset
-            heatmap_filename = f"{os.path.splitext(csv_file)[0]}_heatmap.png"
-            plt.savefig(heatmap_filename)
-            plt.clf()  # Clear the plot for the next iteration
-        except Exception as e:
-            print(f"Error generating heatmap for {csv_file}: {e}")
-
-    # Dynamic Prompt for More Specific Analysis
-    additional_prompt = f"""
-    Based on the dataset {csv_file}, identify any potential outliers in the numerical data and suggest transformations or cleaning steps.
-    """
-
-    try:
-        additional_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an assistant focused on advanced data analysis."},
-                {"role": "user", "content": additional_prompt}
-            ],
-            max_tokens=500
-        )
-        additional_text = additional_response['choices'][0]['message']['content'].strip()
-        with open(report_filename, "a") as f:
-            f.write("## Advanced Insights\n")
-            f.write(additional_text + "\n\n")
-    except Exception as e:
-        print(f"Error generating advanced insights for {csv_file}: {e}")
-
-    print(f"Finished processing {csv_file}. Results saved for {csv_file}.\n")
-
-print("Processing complete for all datasets.")
+def visualize_categorical_columns(df):
+    """Visualize categorical columns using bar plots."""
+    categorical_cols = df.select_dtypes(include=['object', 'category'])
+    if not categorical_cols.empty:
+        for col in categorical_cols.columns:
+            unique_values_count = df[col].nunique()  # Count unique values in the column
+            if unique_values_count > 30:
+                print(f"Skipping {col} as it has {unique_values_count} unique values.")
+                continue  # Skip columns with more than 20 unique values
+            
+            # Proceed to plot if unique values are <= 20
+            plt.figure(figsize=(8, 8), dpi=100)
+            sns.countplot(y=col, data=df, order=df[col].value_counts().index)
+            img_path = f"{col}_plot.png"
+            plt.title(f"Distribution of {col}")
+            plt.savefig(img_path)
+            plt.close()
+            return img_path
+    else:
+        print("No categorical columns found for visualization.")
