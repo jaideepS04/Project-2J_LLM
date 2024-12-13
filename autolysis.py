@@ -54,7 +54,7 @@ for csv_file in CSV_FILES:
                 {"role": "system", "content": "You are an assistant generating data analysis summaries."},
                 {"role": "user", "content": report_prompt}
             ],
-            max_tokens=300
+            max_tokens=500
         )
         report_text = response['choices'][0]['message']['content'].strip()
     except Exception as e:
@@ -101,6 +101,27 @@ for csv_file in CSV_FILES:
             plt.clf()  # Clear the plot for the next iteration
         except Exception as e:
             print(f"Error generating heatmap for {csv_file}: {e}")
+
+    # Dynamic Prompt for More Specific Analysis
+    additional_prompt = f"""
+    Based on the dataset {csv_file}, identify any potential outliers in the numerical data and suggest transformations or cleaning steps.
+    """
+
+    try:
+        additional_response = openai.ChatCompletion.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an assistant focused on advanced data analysis."},
+                {"role": "user", "content": additional_prompt}
+            ],
+            max_tokens=500
+        )
+        additional_text = additional_response['choices'][0]['message']['content'].strip()
+        with open(report_filename, "a") as f:
+            f.write("## Advanced Insights\n")
+            f.write(additional_text + "\n\n")
+    except Exception as e:
+        print(f"Error generating advanced insights for {csv_file}: {e}")
 
     print(f"Finished processing {csv_file}. Results saved for {csv_file}.\n")
 
