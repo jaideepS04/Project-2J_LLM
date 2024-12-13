@@ -19,6 +19,7 @@ def generate_dynamic_prompt(csv_file, data):
     """Generates a dynamic prompt for the AI based on the dataset's columns."""
     prompts = [f"Analyze the dataset {csv_file}. Provide insights on the following:"]
     
+    # The code makes use of dynamic prompts based on dataset content (such as Rating, Genre, Date)
     if "Rating" in data.columns:
         prompts.append("- Analyze the distribution of ratings, and any correlations with other variables.")
     if "Genre" in data.columns:
