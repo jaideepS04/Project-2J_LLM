@@ -17,6 +17,26 @@ if not openai.api_key:
 # List of CSV files to process
 CSV_FILES = ["goodreads.csv", "happiness.csv", "media.csv"]
 
+# Function to generate a dynamic prompt based on the dataset structure
+def generate_dynamic_prompt(csv_file, data):
+    # Check for relevant columns
+    prompts = [f"Analyze the dataset {csv_file}. Provide insights on the following:"]
+    
+    if "Rating" in data.columns:
+        prompts.append("- Analyze the distribution of ratings, and any correlations with other variables.")
+    if "Genre" in data.columns:
+        prompts.append("- Analyze the distribution of genres and their relationship with ratings or other variables.")
+    if "Date" in data.columns:
+        prompts.append("- Explore any temporal trends in the data (e.g., ratings over time).")
+    
+    # Add missing data analysis if applicable
+    missing_data = data.isnull().sum()
+    if missing_data.any():
+        prompts.append("- Provide recommendations for handling missing data.")
+    
+    # Return the dynamically constructed prompt as a single string
+    return " ".join(prompts)
+
 # Process each CSV file
 for csv_file in CSV_FILES:
     print(f"Processing {csv_file}...")
@@ -39,14 +59,9 @@ for csv_file in CSV_FILES:
     missing_data = data.isnull().sum()
     print("Missing data:", missing_data)
 
-    # AI Analysis: Generate summary for each CSV file
-    report_prompt = f"""
-    Analyze the dataset {csv_file}. Provide:
-    - Key statistics and insights
-    - Trends, patterns, or correlations
-    - Recommendations for data cleaning or further analysis
-    """
-
+    # Dynamic AI Analysis: Generate summary for each CSV file based on its content
+    report_prompt = generate_dynamic_prompt(csv_file, data)
+    
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
@@ -102,26 +117,25 @@ for csv_file in CSV_FILES:
         except Exception as e:
             print(f"Error generating heatmap for {csv_file}: {e}")
 
-    # Dynamic Prompt for More Specific Analysis
-    additional_prompt = f"""
+    # Dynamic Prompt for More Specific Analysis: Detect outliers or transformations
+    outlier_prompt = f"""
     Based on the dataset {csv_file}, identify any potential outliers in the numerical data and suggest transformations or cleaning steps.
     """
-
     try:
-        additional_response = openai.ChatCompletion.create(
+        outlier_response = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an assistant focused on advanced data analysis."},
-                {"role": "user", "content": additional_prompt}
+                {"role": "user", "content": outlier_prompt}
             ],
             max_tokens=500
         )
-        additional_text = additional_response['choices'][0]['message']['content'].strip()
+        outlier_text = outlier_response['choices'][0]['message']['content'].strip()
         with open(report_filename, "a") as f:
-            f.write("## Advanced Insights\n")
-            f.write(additional_text + "\n\n")
+            f.write("## Advanced Insights: Outlier Analysis\n")
+            f.write(outlier_text + "\n\n")
     except Exception as e:
-        print(f"Error generating advanced insights for {csv_file}: {e}")
+        print(f"Error generating advanced insights for outliers in {csv_file}: {e}")
 
     print(f"Finished processing {csv_file}. Results saved for {csv_file}.\n")
 
