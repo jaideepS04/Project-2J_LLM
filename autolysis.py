@@ -49,7 +49,7 @@ for csv_file in CSV_FILES:
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-4",  # Ensure to use a valid model name
             messages=[ 
                 {"role": "system", "content": "You are an assistant generating data analysis summaries."},
                 {"role": "user", "content": report_prompt}
@@ -109,7 +109,7 @@ for csv_file in CSV_FILES:
 
     try:
         additional_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-4",  # Ensure to use a valid model name
             messages=[
                 {"role": "system", "content": "You are an assistant focused on advanced data analysis."},
                 {"role": "user", "content": additional_prompt}
