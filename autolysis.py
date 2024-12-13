@@ -5,8 +5,6 @@ matplotlib.use("Agg")  # Use a non-interactive backend
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
-from PIL import Image
-import numpy as np
 
 # Secure setup: Load API key from environment variables
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -125,35 +123,6 @@ for csv_file in CSV_FILES:
             f.write(additional_text + "\n\n")
     except Exception as e:
         print(f"Error generating advanced insights for {csv_file}: {e}")
-
-    # Vision Capability: Processing Image Files
-    image_column = None
-    for col in data.columns:
-        if "image" in col.lower():
-            image_column = col
-            break
-
-    if image_column:
-        print(f"Processing images in column: {image_column}")
-        image_paths = data[image_column].dropna()
-
-        for img_path in image_paths[:5]:  # Limit to first 5 images for processing
-            try:
-                with Image.open(img_path) as img:
-                    img_array = np.array(img)
-                    print(f"Image {img_path} loaded with shape {img_array.shape}.")
-
-                    # Perform basic image analysis (e.g., size, color histograms)
-                    plt.imshow(img)
-                    plt.title(f"Preview of {img_path}")
-                    plt.axis("off")
-                    plt.tight_layout()
-
-                    preview_path = f"{os.path.splitext(csv_file)[0]}_{os.path.basename(img_path)}_preview.png"
-                    plt.savefig(preview_path)
-                    plt.clf()
-            except Exception as e:
-                print(f"Error processing image {img_path}: {e}")
 
     # Efficiently load APIs and minimize redundant API calls
     print(f"Finished processing {csv_file}. Results saved for {csv_file}.\n")
