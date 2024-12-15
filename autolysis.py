@@ -1,157 +1,237 @@
-import pandas as pd
-import openai
-import matplotlib
-matplotlib.use("Agg")  # Use a non-interactive backend
-import matplotlib.pyplot as plt
-import seaborn as sns
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "seaborn",
+#   "pandas",
+#   "matplotlib",
+#   "httpx",
+#   "chardet",
+#   "ipykernel",
+#   "openai",
+#   "numpy",
+#   "scipy",
+# ]
+# ///
+
 import os
+import sys
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import httpx
+import chardet
+from pathlib import Path
+import asyncio
+import scipy.stats as stats
 
-# Secure setup: Load API key from environment variables
-openai.api_key = os.getenv("OPENAI_API_KEY")
-openai.api_base = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
+# Constants
+API_URL = "https://aiproxy.sanand.workers.dev/openai/v1/chat/completions"
 
-# Ensure API key is set
-if not openai.api_key:
-    raise ValueError("OpenAI API key not set. Please configure the environment variable 'OPENAI_API_KEY'.")
-
-# List of CSV files to process
-CSV_FILES = ["goodreads.csv", "happiness.csv", "media.csv"]
-
-# Function to generate a dynamic prompt based on the dataset structure
-def generate_dynamic_prompt(csv_file, data):
-    """
-    Generates a dynamic prompt based on the dataset structure, tailored to its columns.
-    This allows the AI to provide dataset-specific insights without requiring static prompts.
-
-    :param csv_file: The name of the CSV file
-    :param data: The DataFrame holding the dataset
-    :return: A dynamically generated prompt for the AI
-    """
-    prompts = [f"Analyze the dataset {csv_file}. Provide insights on the following:"]
-
-    if "Rating" in data.columns:
-        prompts.append("- Analyze the distribution of ratings, and any correlations with other variables.")
-    if "Genre" in data.columns:
-        prompts.append("- Analyze the distribution of genres and their relationship with ratings or other variables.")
-    if "Date" in data.columns:
-        prompts.append("- Explore any temporal trends in the data (e.g., ratings over time).")
-    
-    # Add missing data analysis if applicable
-    missing_data = data.isnull().sum()
-    if missing_data.any():
-        prompts.append("- Provide recommendations for handling missing data.")
-    
-    return " ".join(prompts)
-
-# Process each CSV file
-for csv_file in CSV_FILES:
-    print(f"Processing {csv_file}...")
-
+# Ensure token is retrieved from environment variable
+def get_token():
     try:
-        # Try reading the dataset with different encoding
-        data = pd.read_csv(csv_file, encoding='ISO-8859-1')  # Try 'ISO-8859-1' or 'latin1'
-    except UnicodeDecodeError:
-        print(f"Error: Unable to read {csv_file} due to encoding issues.")
-        continue  # Skip to the next file if encoding fails
+        return os.environ["AIPROXY_TOKEN"]
+    except KeyError as e:
+        print(f"Error: Environment variable '{e.args[0]}' not set.")
+        raise
 
-    print(data.columns)
-    print(data.head())  # Check the first few rows
+async def load_data(file_path):
+    """Load CSV data with encoding detection."""
+    if not os.path.isfile(file_path):
+        raise FileNotFoundError(f"Error: File '{file_path}' not found.")
 
-    # Generate descriptive statistics
-    summary = data.describe(include="all")
-    print(summary)
+    with open(file_path, 'rb') as f:
+        result = chardet.detect(f.read())
+    encoding = result['encoding']
+    print(f"Detected file encoding: {encoding}")
+    return pd.read_csv(file_path, encoding=encoding)
 
-    # Count missing values
-    missing_data = data.isnull().sum()
-    print("Missing data:", missing_data)
-
-    # Dynamic AI Analysis: Generate summary for each CSV file based on its content
-    report_prompt = generate_dynamic_prompt(csv_file, data)
-    
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[ 
-                {"role": "system", "content": "You are an assistant generating data analysis summaries."},
-                {"role": "user", "content": report_prompt}
-            ],
-            max_tokens=500  # Minimize token usage by being concise
-        )
-        report_text = response['choices'][0]['message']['content'].strip()
-    except Exception as e:
-        print(f"Error generating AI report for {csv_file}: {e}")
-        report_text = "Error generating report. Please check the dataset and API configuration."
-
-    # Save the report for each dataset
-    report_filename = f"{os.path.splitext(csv_file)[0]}_README.md"
-    with open(report_filename, "w") as f:
-        f.write(f"# Data Analysis Report for {csv_file.capitalize()}\n")
-        f.write("## Summary\n")
-        f.write(report_text + "\n\n")
-
-    # Visualization: Top Genres or Any Relevant Columns (if applicable)
-    if "Genre" in data.columns and "Rating" in data.columns:
+async def async_post_request(headers, data):
+    """Async function to make HTTP requests."""
+    async with httpx.AsyncClient() as client:
         try:
-            top_genres = data.groupby("Genre")["Rating"].mean().sort_values(ascending=False).head(5)
-            sns.barplot(x=top_genres.index, y=top_genres.values)
-            plt.title(f"Top 5 Genres by Average Rating for {csv_file}")
-            plt.xticks(rotation=45)
-            plt.tight_layout()
-
-            # Save the bar plot for each dataset
-            output_path = f"{os.path.splitext(csv_file)[0]}_top_genres.png"
-            plt.savefig(output_path)
-            plt.clf()  # Clear the plot for the next iteration
+            response = await client.post(API_URL, headers=headers, json=data, timeout=30.0)
+            response.raise_for_status()
+            return response.json()['choices'][0]['message']['content']
+        except httpx.HTTPStatusError as e:
+            print(f"HTTP error occurred: {e}")
+            raise
         except Exception as e:
-            print(f"Error generating genre visualization for {csv_file}: {e}")
+            print(f"Error during request: {e}")
+            raise
+
+async def generate_narrative(analysis, token, file_path):
+    """Generate narrative using LLM."""
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+
+    # Enhanced prompt to generate more detailed and specific narrative
+    prompt = (
+        f"You are a data analyst. Provide a detailed narrative based on the following data analysis results for the file '{file_path.name}':\n\n"
+        f"Column Names & Types: {list(analysis['summary'].keys())}\n\n"
+        f"Summary Statistics: {analysis['summary']}\n\n"
+        f"Missing Values: {analysis['missing_values']}\n\n"
+        f"Correlation Matrix: {analysis['correlation']}\n\n"
+        "Please provide insights into any trends, outliers, anomalies, or patterns you detect. "
+        "Also, suggest additional analyses that could provide more insights, such as clustering, anomaly detection, etc. "
+        "Describe how each observation or trend might impact future decision-making or actions."
+    )
+
+    data = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": prompt}]
+    }
+
+    return await async_post_request(headers, data)
+
+async def analyze_data(df, token):
+    """Use LLM to suggest and perform data analysis."""
+    if df.empty:
+        raise ValueError("Error: Dataset is empty.")
+
+    # Enhanced prompt for better LLM analysis suggestions
+    prompt = (
+        f"You are a data analyst. Given the following dataset information, provide an analysis plan and suggest useful techniques:\n\n"
+        f"Columns: {list(df.columns)}\n"
+        f"Data Types: {df.dtypes.to_dict()}\n"
+        f"First 5 rows of data:\n{df.head()}\n\n"
+        "Please suggest useful data analysis techniques, such as correlation analysis, regression, anomaly detection, clustering, or others. "
+        "Also, consider the scale of the data and recommend ways to deal with potential challenges like missing values, categorical variables, etc."
+    )
+
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+    data = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": prompt}]
+    }
+
+    try:
+        suggestions = await async_post_request(headers, data)
+    except Exception as e:
+        suggestions = f"Error fetching suggestions: {e}"
+
+    print(f"LLM Suggestions: {suggestions}")
+
+    # Basic analysis (summary statistics, missing values, correlations)
+    numeric_df = df.select_dtypes(include=['number'])
+    analysis = {
+        'summary': df.describe(include='all').to_dict(),
+        'missing_values': df.isnull().sum().to_dict(),
+        'correlation': numeric_df.corr().to_dict() if not numeric_df.empty else {}
+    }
+
+    # Example of hypothesis testing (t-test) on a pair of columns (assuming 'A' and 'B' exist in the dataframe)
+    if 'A' in df.columns and 'B' in df.columns:
+        t_stat, p_value = stats.ttest_ind(df['A'].dropna(), df['B'].dropna())
+        analysis['hypothesis_test'] = {
+            't_stat': t_stat,
+            'p_value': p_value
+        }
+
+    print("Data analysis complete.")
+    return analysis, suggestions
+
+async def visualize_data(df, output_dir, analysis):
+    """Generate and save visualizations."""
+    sns.set(style="whitegrid")
+    numeric_columns = df.select_dtypes(include=['number']).columns
+
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Limit to 3 distribution plots for numeric columns
+    for idx, column in enumerate(numeric_columns[:3]):
+        plt.figure(figsize=(6, 6))
+        sns.histplot(df[column].dropna(), kde=True, color='skyblue')
+        plt.title(f'Distribution of {column}')
+        file_name = output_dir / f'{column}_distribution.png'
+        plt.savefig(file_name, dpi=100)
+        print(f"Saved distribution plot: {file_name}")
+        plt.close()
+
+    # Generate one correlation heatmap (if numeric columns exist)
+    if numeric_columns.any():
+        plt.figure(figsize=(8, 8))
+        corr = df[numeric_columns].corr()
+        sns.heatmap(corr, annot=True, cmap='coolwarm', square=True)
+        plt.title('Correlation Heatmap')
+        file_name = output_dir / 'correlation_heatmap.png'
+        plt.savefig(file_name, dpi=100)
+        print(f"Saved correlation heatmap: {file_name}")
+        plt.close()
+
+async def save_narrative_with_images(narrative, output_dir):
+    """Save narrative to README.md and embed image links."""
+    readme_path = output_dir / 'README.md'
+    image_links = "\n".join(
+        [f"![{img.name}]({img.name})" for img in output_dir.glob('*.png')]
+    )
+    with open(readme_path, 'w') as f:
+        f.write(narrative + "\n\n" + image_links)
+    print(f"Narrative successfully written to {readme_path}")
+
+async def main(file_path):
+    print("Starting autolysis process...")
+
+    # Ensure input file exists
+    file_path = Path(file_path)
+    if not file_path.is_file():
+        print(f"Error: File '{file_path}' does not exist.")
+        sys.exit(1)
+
+    # Load token
+    try:
+        token = get_token()
+    except Exception as e:
+        print(e)
+        sys.exit(1)
+
+    # Load dataset
+    try:
+        df = await load_data(file_path)
+    except FileNotFoundError as e:
+        print(e)
+        sys.exit(1)
+    print("Dataset loaded successfully.")
+
+    # Analyze data with LLM insights
+    print("Analyzing data...")
+    try:
+        analysis, suggestions = await analyze_data(df, token)
+    except ValueError as e:
+        print(e)
+        sys.exit(1)
+
+    print(f"LLM Analysis Suggestions: {suggestions}")
+
+    # Create output directory
+    output_dir = Path(file_path.stem)  # Create a directory named after the dataset
+    output_dir.mkdir(exist_ok=True)
+
+    # Generate visualizations with LLM suggestions
+    print("Generating visualizations...")
+    await visualize_data(df, output_dir, analysis)
+
+    # Generate narrative
+    print("Generating narrative using LLM...")
+    narrative = await generate_narrative(analysis, token, file_path)
+
+    if narrative != "Narrative generation failed due to an error.":
+        await save_narrative_with_images(narrative, output_dir)
     else:
-        print(f"Skipping top genres visualization for {csv_file} - 'Genre' or 'Rating' column missing.")    
+        print("Narrative generation failed. Skipping README creation.")
 
-    # Correlation Heatmap for numeric columns (if applicable)
-    numeric_data = data.select_dtypes(include=['number'])
-    if not numeric_data.empty:
-        try:
-            corr = numeric_data.corr()
-            sns.heatmap(corr, annot=True, cmap="coolwarm")
-            plt.title(f"Correlation Heatmap for {csv_file}")
-            plt.tight_layout()
+    print("Autolysis process completed.")
 
-            # Save the heatmap for each dataset
-            heatmap_filename = f"{os.path.splitext(csv_file)[0]}_heatmap.png"
-            plt.savefig(heatmap_filename)
-            plt.clf()  # Clear the plot for the next iteration
-        except Exception as e:
-            print(f"Error generating heatmap for {csv_file}: {e}")
+if _name_ == "_main_":
+    if len(sys.argv) != 2:
+        print("Usage: python autolysis.py <file_path>")
+        sys.exit(1)
 
-    # Dynamic Prompt for More Specific Analysis: Detect outliers or transformations
-    outlier_prompt = f"""
-    Based on the dataset {csv_file}, identify any potential outliers in the numerical data and suggest transformations or cleaning steps.
-    """
-    try:
-        outlier_response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an assistant focused on advanced data analysis."},
-                {"role": "user", "content": outlier_prompt}
-            ],
-            max_tokens=500  # Minimize token usage while providing adequate detail
-        )
-        outlier_text = outlier_response['choices'][0]['message']['content'].strip()
-        with open(report_filename, "a") as f:
-            f.write("## Advanced Insights: Outlier Analysis\n")
-            f.write(outlier_text + "\n\n")
-    except Exception as e:
-        print(f"Error generating advanced insights for outliers in {csv_file}: {e}")
-
-    print(f"Finished processing {csv_file}. Results saved for {csv_file}.\n")
-
-print("Processing complete for all datasets.")
-
-# Key Insights:
-# 1. **The code is structured logically** – The flow of operations (load data, analyze, generate insights) follows a well-structured pipeline.
-# 2. **The code performs a considerable amount of basic analysis** – Descriptive statistics, missing data checks, and correlation heatmaps are produced for basic data exploration.
-# 3. **The code uses appropriate visualization techniques** – It generates bar plots for genre distribution and correlation heatmaps for numerical columns.
-# 4. **The code generates a structured report for each dataset** – The generated Markdown report includes an analysis summary, outlier insights, and visualization results.
-# 5. **The code minimizes token usage somewhat by generating dynamic prompts** – Dynamic prompt construction helps ensure AI-generated reports are efficient and context-specific.
-# 6. **The code includes some dynamic prompts tailored to each dataset** – Depending on the columns available (e.g., Genre, Rating, Date), the AI prompt adjusts accordingly.
-# 7. **The code does not utilize any vision capabilities** – Since the data is CSV-based, no image processing or computer vision techniques are used.
+    file_path = sys.argv[1]
+    asyncio.run(main(file_path))
